@@ -3,6 +3,7 @@ import { AiOutlineDown, AiOutlineUp } from "react-icons/ai"; // Import icons for
 
 export default function Home() {
   const [jsonInput, setJsonInput] = useState("");
+  const [formatedJson, setFormatedJson] = useState("");
   const [error, setError] = useState("");
   const [suggestions, setSuggestions] = useState("");
   const [lineNumbers, setLineNumbers] = useState(["1"]);
@@ -20,7 +21,9 @@ export default function Home() {
   const handleFormat = () => {
     try {
       const parsedJson = JSON.parse(jsonInput);
-      setJsonInput(JSON.stringify(parsedJson, null, 2));
+      const formattedJson = JSON.stringify(parsedJson, null, 2);
+      setJsonInput(formattedJson); // Update the input with formatted JSON
+      setFormatedJson(formattedJson); // Update the input with formatted JSON
       setError("");
       setSuggestions("");
       setIsValidJson(true);
@@ -52,6 +55,7 @@ export default function Home() {
     if (positionMatch) {
       const position = parseInt(positionMatch[1], 10);
       const lines = jsonString.substring(0, position).split("\n");
+      console.log("jlines", lines);
       const lineNumber = lines.length;
       return `Error: Invalid JSON at line ${lineNumber} - ${error.message}`;
     }
@@ -124,9 +128,7 @@ export default function Home() {
 
   return (
     <div className="flex flex-col items-center p-8">
-      <h1 className="text-2xl font-bold mb-4 text-white">
-        JSON Formatter & Validator
-      </h1>
+      <h1 className="text-2xl font-bold mb-4">JSON Formatter & Validator</h1>
 
       <div className="flex w-full">
         {/* Line numbers with expand/collapse icons */}
@@ -137,12 +139,12 @@ export default function Home() {
               className="leading-6"
             >
               {index < lineNumbers.length - 1 &&
-              (jsonInput.split("\n")[index].includes("{") ||
-                jsonInput.split("\n")[index].includes("[")) ? (
+              (jsonInput.split("\n")[index]?.includes("{") ||
+                jsonInput.split("\n")[index]?.includes("[")) ? (
                 <span>
                   <button
                     onClick={() => toggleCollapse(`line-${index}`)}
-                    className="mr-2 bg-red"
+                    className="mr-2"
                     style={{
                       cursor: "pointer",
                       background: "none",
@@ -177,7 +179,6 @@ export default function Home() {
           onChange={(e) => setJsonInput(e.target.value)}
           placeholder="Paste JSON here"
           style={{ resize: "none" }}
-          id="inputox"
         ></textarea>
       </div>
 
@@ -208,10 +209,10 @@ export default function Home() {
       {suggestions && <p className="text-yellow-600 mt-2">{suggestions}</p>}
 
       {/* JSON Viewer */}
-      {jsonInput && (
+      {formatedJson && (
         <div className="mt-4 w-full">
           <h2 className="text-xl font-semibold mb-2">JSON Structure:</h2>
-          <JsonViewer data={JSON.parse(jsonInput)} />
+          <JsonViewer data={JSON.parse(formatedJson)} />
         </div>
       )}
     </div>
