@@ -1,9 +1,9 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 
 export default function Home() {
   const [jsonInput, setJsonInput] = useState('');
   const [error, setError] = useState(null);
-  const preRef = useRef(null); // Reference to the <pre> tag
+  const preRef = useRef(null);
 
   const formatJson = () => {
     try {
@@ -16,7 +16,10 @@ export default function Home() {
     }
   };
 
-  // Save and restore cursor position
+  // Generate line numbers based on jsonInput
+  const lineNumbers = jsonInput.split('\n').map((_, index) => index + 1);
+
+  // Save and restore cursor position to avoid jump to top
   const saveCaretPosition = () => {
     const selection = window.getSelection();
     if (selection && selection.rangeCount > 0) {
@@ -62,7 +65,7 @@ export default function Home() {
   const handleInput = (e) => {
     const position = saveCaretPosition();
     setJsonInput(e.currentTarget.innerText);
-    setTimeout(() => restoreCaretPosition(position), 0); // Restore cursor after state update
+    setTimeout(() => restoreCaretPosition(position), 0);
   };
 
   return (
@@ -80,24 +83,42 @@ export default function Home() {
             Format JSON
           </button>
 
-          {/* Editable JSON Input/Output in One <pre> Tag */}
-          <div className="bg-gray-100 p-4 border rounded w-full">
-            <pre
-              ref={preRef}
-              contentEditable="true"
-              suppressContentEditableWarning={true}
-              onInput={handleInput}
+          {/* Line numbers and JSON editor */}
+          <div className="flex w-full">
+            {/* Line Numbers */}
+            <div
               style={{
-                whiteSpace: 'pre-wrap',
-                outline: 'none',
+                paddingRight: '10px',
+                textAlign: 'right',
                 fontFamily: 'monospace',
-                minHeight: '200px',
-                color: 'black',
+                color: 'gray',
+                userSelect: 'none',
               }}
-              className="text-black"
             >
-              {jsonInput || 'Enter JSON here...'}
-            </pre>
+              {lineNumbers.map((line) => (
+                <div key={line}>{line}</div>
+              ))}
+            </div>
+
+            {/* Editable JSON Input/Output in One <pre> Tag */}
+            <div className="bg-gray-100 p-4 border rounded w-full">
+              <pre
+                ref={preRef}
+                contentEditable="true"
+                suppressContentEditableWarning={true}
+                onInput={handleInput}
+                style={{
+                  whiteSpace: 'pre-wrap',
+                  outline: 'none',
+                  fontFamily: 'monospace',
+                  minHeight: '200px',
+                  color: 'black',
+                }}
+                className="text-black"
+              >
+                {jsonInput || 'Enter JSON here...'}
+              </pre>
+            </div>
           </div>
           {error && <p className="text-red-500 mt-2">{error}</p>}
         </div>
