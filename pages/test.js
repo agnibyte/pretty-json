@@ -1,8 +1,9 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef } from "react";
 
 export default function Home() {
-  const [jsonInput, setJsonInput] = useState('');
+  const [jsonInput, setJsonInput] = useState("");
   const [error, setError] = useState(null);
+  const [collapsedSections, setCollapsedSections] = useState({});
   const preRef = useRef(null);
 
   const formatJson = () => {
@@ -12,67 +13,44 @@ export default function Home() {
       setJsonInput(formattedJson);
       setError(null);
     } catch (e) {
-      setError('Invalid JSON');
+      setError("Invalid JSON");
     }
   };
 
-  // Generate line numbers based on jsonInput
-  const lineNumbers = jsonInput.split('\n').map((_, index) => index + 1);
-
-  // Save and restore cursor position to avoid jump to top
-  const saveCaretPosition = () => {
-    const selection = window.getSelection();
-    if (selection && selection.rangeCount > 0) {
-      const range = selection.getRangeAt(0);
-      const pre = preRef.current;
-      const preRange = document.createRange();
-      preRange.selectNodeContents(pre);
-      preRange.setEnd(range.startContainer, range.startOffset);
-      return preRange.toString().length;
-    }
-    return 0;
+  const toggleCollapse = (startLine) => {
+    setCollapsedSections((prev) => ({
+      ...prev,
+      [startLine]: !prev[startLine],
+    }));
   };
+console.log('collapsedSections', collapsedSections)
+  const parseJsonWithCollapse = (json) => {
+    const lines = json.split("\n");
+    const collapsibleRanges = [];
+    const stack = [];
 
-  const restoreCaretPosition = (position) => {
-    const selection = window.getSelection();
-    const range = document.createRange();
-    const pre = preRef.current;
-    range.selectNodeContents(pre);
-    let charCount = 0;
-
-    function traverseNodes(node) {
-      if (node.nodeType === Node.TEXT_NODE) {
-        const nextCharCount = charCount + node.length;
-        if (position <= nextCharCount) {
-          range.setStart(node, position - charCount);
-          range.collapse(true);
-          selection.removeAllRanges();
-          selection.addRange(range);
-          return true;
-        }
-        charCount = nextCharCount;
-      } else {
-        for (const child of node.childNodes) {
-          if (traverseNodes(child)) return true;
+    lines.forEach((line, index) => {
+      const trimmed = line.trim();
+      if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
+        stack.push(index);
+      } else if (trimmed.endsWith("}") || trimmed.endsWith("]")) {
+        const start = stack.pop();
+        if (start !== undefined) {
+          collapsibleRanges.push({ start, end: index });
         }
       }
-      return false;
-    }
+    });
 
-    traverseNodes(pre);
+    return { lines, collapsibleRanges };
   };
 
-  const handleInput = (e) => {
-    const position = saveCaretPosition();
-    setJsonInput(e.currentTarget.innerText);
-    setTimeout(() => restoreCaretPosition(position), 0);
-  };
+  const { lines, collapsibleRanges } = parseJsonWithCollapse(jsonInput);
 
   return (
     <div className="min-h-screen bg-gray-500 flex items-center justify-center">
       <div className="bg-gray-700 p-6 rounded shadow-lg max-w-5xl w-full">
         <h1 className="text-2xl font-bold mb-4 text-center text-white">
-          Editable JSON Formatter
+          Editable JSON Formatter with Collapsible Blocks
         </h1>
 
         <div className="flex flex-col items-center">
@@ -83,21 +61,42 @@ export default function Home() {
             Format JSON
           </button>
 
-          {/* Line numbers and JSON editor */}
+          {/* Line numbers, arrows, and JSON editor */}
           <div className="flex w-full">
-            {/* Line Numbers */}
+            {/* Line Numbers and Arrows */}
             <div
               style={{
-                paddingRight: '10px',
-                textAlign: 'right',
-                fontFamily: 'monospace',
-                color: 'gray',
-                userSelect: 'none',
+                paddingRight: "10px",
+                textAlign: "right",
+                fontFamily: "monospace",
+                color: "gray",
+                userSelect: "none",
               }}
             >
-              {lineNumbers.map((line) => (
-                <div key={line}>{line}</div>
-              ))}
+              {lines.map((line, index) => {
+                const isCollapsible =
+                  line.trim().includes("{") || line.trim().includes("[");
+                return (
+                  <div
+                    key={index}
+                    className="flex items-center"
+                  >
+                    <span>{index + 1}</span>
+                    {isCollapsible && (
+                      <button
+                        onClick={() => toggleCollapse(index)}
+                        style={{
+                          cursor: "pointer",
+                          color: "blue",
+                          marginRight: "5px",
+                        }}
+                      >
+                        {collapsedSections[index] ? "▶" : "▼"}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {/* Editable JSON Input/Output in One <pre> Tag */}
@@ -106,17 +105,46 @@ export default function Home() {
                 ref={preRef}
                 contentEditable="true"
                 suppressContentEditableWarning={true}
-                onInput={handleInput}
+                onInput={(e) => setJsonInput(e.currentTarget.innerText)}
                 style={{
-                  whiteSpace: 'pre-wrap',
-                  outline: 'none',
-                  fontFamily: 'monospace',
-                  minHeight: '200px',
-                  color: 'black',
+                  whiteSpace: "pre-wrap",
+                  outline: "none",
+                  fontFamily: "monospace",
+                  minHeight: "200px",
+                  color: "black",
                 }}
                 className="text-black"
               >
-                {jsonInput || 'Enter JSON here...'}
+                {lines.map((line, index) => {
+                  const isCollapsed = collapsedSections[index];
+                  const range = collapsibleRanges.find(
+                    (range) => range.start === index
+                  );
+
+                  // If the line is part of a collapsed section, hide lines within the range
+                  if (
+                    isCollapsed &&
+                    range &&
+                    index > range.start &&
+                    index <= range.end
+                  ) {
+                    return null;
+                  }
+
+                  // Show collapsed summary for the start of a collapsible section
+                  if (isCollapsed && range && index === range.start) {
+                    return (
+                      <div
+                        key={index}
+                        style={{ cursor: "pointer" }}
+                      >
+                        {line.trim().startsWith("{") ? "{...}" : "[...]"}
+                      </div>
+                    );
+                  }
+
+                  return <div key={index}>{line}</div>;
+                })}
               </pre>
             </div>
           </div>
