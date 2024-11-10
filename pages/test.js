@@ -1,21 +1,63 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 
 export default function Home() {
   const [jsonInput, setJsonInput] = useState("");
+  const [formattedJson, setFormattedJson] = useState("");
   const [error, setError] = useState(null);
   const [collapsedSections, setCollapsedSections] = useState({});
-  const preRef = useRef(null);
+  const [isFormatted, setIsFormatted] = useState(true);
+  const contentEditableRef = useRef(null);
+  const [suggestions, setSuggestions] = useState([]);
+  const [collapsibleRanges, setCollapsibleRanges] = useState([]);
+  const [lines, setLines] = useState("");
 
-  const formatJson = () => {
+  const getSuggestions = (error) => {
+    if (error.message.includes("Unexpected token")) {
+      return "Suggestion: Check for trailing commas or missing quotation marks.";
+    } else if (error.message.includes("Unexpected end of JSON input")) {
+      return "Suggestion: Ensure all braces and brackets are properly closed.";
+    }
+    return "Suggestion: Review your JSON structure.";
+  };
+
+  const getJsonErrorWithLine = (error, jsonString) => {
+    const errorMsg = error.message;
+    const positionMatch = errorMsg.match(/position (\d+)/);
+    if (positionMatch) {
+      const position = parseInt(positionMatch[1], 10);
+      const lines = jsonString.substring(0, position).split("\n");
+      console.log("jlines", lines);
+      const lineNumber = lines.length;
+      return `Error: Invalid JSON at line ${lineNumber} - ${error.message}`;
+    }
+    return "Error: Invalid JSON - " + error.message;
+  };
+
+  const handleFormat = () => {
+    const test1 = formattedJson && JSON.stringify(formattedJson);
+    const test2 = JSON.stringify(jsonInput);
+    const areJsonEqual = test1 === test2;
+    console.log({ areJsonEqual });
+    // console.log("areJsonEqual json", test1);
+    // console.log("areJsonEqual 2", test2);
     try {
-      const parsedJson = JSON.parse(jsonInput);
-      const formattedJson = JSON.stringify(parsedJson, null, 2);
-      setJsonInput(formattedJson);
+      const stringJson = JSON.stringify(jsonInput);
+      const parsedJson = JSON.parse(stringJson);
+      // console.log("parsedJson", isFormatted, parsedJson);
+      const newFormattedJson = JSON.stringify(parsedJson, null, 2);
+      setFormattedJson(newFormattedJson); // Set formatted JSON
+      // setJsonInput(newFormattedJson); // Set jsonInput to formatted JSON as well
       setError(null);
+      setIsFormatted(true);
+      console.log("stringJson check", stringJson === newFormattedJson);
     } catch (e) {
-      setError("Invalid JSON");
+      const errorMessage = getJsonErrorWithLine(e, jsonInput);
+      setError(errorMessage);
+      setSuggestions(getSuggestions(e));
+      // setIsValidJson(false);
     }
   };
+  // console.log("formattedJson", formattedJson);
 
   const toggleCollapse = (startLine) => {
     setCollapsedSections((prev) => ({
@@ -23,132 +65,176 @@ export default function Home() {
       [startLine]: !prev[startLine],
     }));
   };
-console.log('collapsedSections', collapsedSections)
-  const parseJsonWithCollapse = (json) => {
-    const lines = json.split("\n");
-    const collapsibleRanges = [];
-    const stack = [];
 
-    lines.forEach((line, index) => {
-      const trimmed = line.trim();
-      if (trimmed.startsWith("{") || trimmed.startsWith("[")) {
-        stack.push(index);
-      } else if (trimmed.endsWith("}") || trimmed.endsWith("]")) {
-        const start = stack.pop();
-        if (start !== undefined) {
-          collapsibleRanges.push({ start, end: index });
-        }
+  const parseJsonWithCollapse = (jsonString) => {
+    let parsedJsonString = jsonString;
+    console.log("jsonString:", jsonString);
+
+    if (typeof parsedJsonString !== "string") {
+      try {
+        parsedJsonString = JSON.stringify(jsonString, null, 2); // Use pretty-print format if needed
+      } catch (error) {
+        console.error("Error converting JSON object to string:", error);
+        parsedJsonString = ""; // Set to an empty string if conversion fails
       }
-    });
+    }
+    try {
+      const lines = parsedJsonString.split("\n");
+      const collapsibleRanges = [];
+      const stack = [];
 
-    return { lines, collapsibleRanges };
+      lines.forEach((line, index) => {
+        const trimmedLine = line.trim();
+        if (trimmedLine.startsWith("{") || trimmedLine.startsWith("[")) {
+          stack.push(index);
+        } else if (trimmedLine.endsWith("}") || trimmedLine.endsWith("]")) {
+          const start = stack.pop();
+          if (start !== undefined) {
+            collapsibleRanges.push({ start, end: index });
+          }
+        }
+      });
+
+      return { lines, collapsibleRanges };
+    } catch (error) {
+      console.error("Error parsing JSON:", error);
+      return { lines: [], collapsibleRanges: [] };
+    }
   };
 
-  const { lines, collapsibleRanges } = parseJsonWithCollapse(jsonInput);
+  useEffect(() => {
+    const jsonString = isFormatted ? formattedJson : jsonInput;
+    const parsedData = parseJsonWithCollapse(jsonString);
+    setLines(parsedData.lines);
+    setCollapsibleRanges(parsedData.collapsibleRanges);
+  }, [isFormatted, formattedJson, jsonInput]);
+
+  const handleEdit = (e) => {
+    console.log("heree");
+    const jsonContent = e.currentTarget.innerText;
+
+    try {
+      const parsedJson = JSON.parse(jsonContent);
+      // const cleanedJson = JSON.stringify(parsedJson, null, 2);
+      setIsFormatted(false);
+      // setFormattedJson(cleanedJson); // Update formatted JSON state
+      setJsonInput(parsedJson); // Keep jsonInput in sync
+      setError(null);
+    } catch (error) {
+      setError("Invalid JSON format");
+    }
+  };
+  console.log('formattedJson+isFormatted', formattedJson+isFormatted)
 
   return (
     <div className="min-h-screen bg-gray-500 flex items-center justify-center">
       <div className="bg-gray-700 p-6 rounded shadow-lg max-w-5xl w-full">
         <h1 className="text-2xl font-bold mb-4 text-center text-white">
-          Editable JSON Formatter with Collapsible Blocks
+          Editable JSON Formatter with Collapsible Sections
         </h1>
 
         <div className="flex flex-col items-center">
+          {/* Removed the textarea to allow direct editing in the formatted section */}
           <button
             className="bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 transition mb-4"
-            onClick={formatJson}
+            onClick={handleFormat}
           >
             Format JSON
           </button>
 
-          {/* Line numbers, arrows, and JSON editor */}
-          <div className="flex w-full">
-            {/* Line Numbers and Arrows */}
+          {/* {isFormatted && ( */}
             <div
-              style={{
-                paddingRight: "10px",
-                textAlign: "right",
-                fontFamily: "monospace",
-                color: "gray",
-                userSelect: "none",
-              }}
+              key={formattedJson+isFormatted} // Use formattedJson as a key to force re-render
+              className="flex w-full bg-gray-300 p-4 border rounded"
             >
-              {lines.map((line, index) => {
-                const isCollapsible =
-                  line.trim().includes("{") || line.trim().includes("[");
-                return (
-                  <div
-                    key={index}
-                    className="flex items-center"
-                  >
-                    <span>{index + 1}</span>
-                    {isCollapsible && (
-                      <button
-                        onClick={() => toggleCollapse(index)}
-                        style={{
-                          cursor: "pointer",
-                          color: "blue",
-                          marginRight: "5px",
-                        }}
-                      >
-                        {collapsedSections[index] ? "▶" : "▼"}
-                      </button>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Editable JSON Input/Output in One <pre> Tag */}
-            <div className="bg-gray-100 p-4 border rounded w-full">
-              <pre
-                ref={preRef}
-                contentEditable="true"
-                suppressContentEditableWarning={true}
-                onInput={(e) => setJsonInput(e.currentTarget.innerText)}
+              {/* Line Numbers and Collapse Arrows */}
+              <div
                 style={{
-                  whiteSpace: "pre-wrap",
-                  outline: "none",
+                  paddingRight: "10px",
+                  textAlign: "right",
                   fontFamily: "monospace",
-                  minHeight: "200px",
-                  color: "black",
+                  color: "gray",
+                  userSelect: "none",
                 }}
-                className="text-black"
               >
-                {lines.map((line, index) => {
-                  const isCollapsed = collapsedSections[index];
-                  const range = collapsibleRanges.find(
-                    (range) => range.start === index
-                  );
+                {lines &&
+                  lines.map((line, index) => {
+                    const isCollapsible =
+                      line.trim().startsWith("{") ||
+                      line.trim().startsWith("[");
+                    const range = collapsibleRanges.find(
+                      (range) => range.start === index
+                    );
 
-                  // If the line is part of a collapsed section, hide lines within the range
-                  if (
-                    isCollapsed &&
-                    range &&
-                    index > range.start &&
-                    index <= range.end
-                  ) {
-                    return null;
-                  }
-
-                  // Show collapsed summary for the start of a collapsible section
-                  if (isCollapsed && range && index === range.start) {
                     return (
                       <div
                         key={index}
-                        style={{ cursor: "pointer" }}
+                        className="flex items-center"
                       >
-                        {line.trim().startsWith("{") ? "{...}" : "[...]"}
+                        <span>{index + 1}</span>
+                        {isCollapsible && (
+                          <button
+                            onClick={() => toggleCollapse(index)}
+                            style={{
+                              cursor: "pointer",
+                              color: "blue",
+                              marginLeft: "5px",
+                            }}
+                          >
+                            {collapsedSections[index] ? "▶" : "▼"}
+                          </button>
+                        )}
                       </div>
                     );
-                  }
+                  })}
+              </div>
 
-                  return <div key={index}>{line}</div>;
-                })}
-              </pre>
+              {/* JSON Content */}
+              <div
+                ref={contentEditableRef}
+                contentEditable
+                suppressContentEditableWarning={true}
+                onInput={handleEdit}
+                style={{
+                  whiteSpace: "pre-wrap",
+                  fontFamily: "monospace",
+                  color: "black",
+                  outline: "none",
+                  width: "100%",
+                }}
+              >
+                {lines &&
+                  lines.map((line, index) => {
+                    const isCollapsed = collapsedSections[index];
+                    const range = collapsibleRanges.find(
+                      (range) => range.start === index
+                    );
+
+                    if (
+                      isCollapsed &&
+                      range &&
+                      index > range.start &&
+                      index <= range.end
+                    ) {
+                      return null;
+                    }
+
+                    return (
+                      <div key={index}>
+                        {isCollapsed && range && index === range.start
+                          ? line.trim().startsWith("{")
+                            ? "{...}"
+                            : "[...]"
+                          : line}
+                      </div>
+                    );
+                  })}
+              </div>
             </div>
-          </div>
+          {/* )} */}
           {error && <p className="text-red-500 mt-2">{error}</p>}
+
+          {suggestions && <p className="text-yellow-600 mt-2">{suggestions}</p>}
         </div>
       </div>
     </div>
