@@ -1,23 +1,52 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
+import { AiOutlineDown, AiOutlineUp } from "react-icons/ai"; // Import icons for expand/collapse
 
 export default function Home() {
   const [jsonInput, setJsonInput] = useState("");
-  const [formattedJson, setFormattedJson] = useState("");
-  const [error, setError] = useState(null);
-  const [collapsedSections, setCollapsedSections] = useState({});
-  const [isFormatted, setIsFormatted] = useState(true);
-  const contentEditableRef = useRef(null);
-  const [suggestions, setSuggestions] = useState([]);
-  const [collapsibleRanges, setCollapsibleRanges] = useState([]);
-  const [lines, setLines] = useState("");
+  const [formatedJson, setFormatedJson] = useState("");
+  const [error, setError] = useState("");
+  const [suggestions, setSuggestions] = useState("");
+  const [lineNumbers, setLineNumbers] = useState(["1"]);
+  const [collapsed, setCollapsed] = useState({}); // Track collapsed state
+  const [isValidJson, setIsValidJson] = useState(null);
 
-  const getSuggestions = (error) => {
-    if (error.message.includes("Unexpected token")) {
-      return "Suggestion: Check for trailing commas or missing quotation marks.";
-    } else if (error.message.includes("Unexpected end of JSON input")) {
-      return "Suggestion: Ensure all braces and brackets are properly closed.";
+  const textareaRef = useRef(null);
+
+  useEffect(() => {
+    const lines = jsonInput.split("\n").length;
+    const numbers = Array.from({ length: lines }, (_, i) => i + 1);
+    setLineNumbers(numbers);
+  }, [jsonInput]);
+
+  const handleFormat = () => {
+    try {
+      const parsedJson = JSON.parse(jsonInput);
+      const formattedJson = JSON.stringify(parsedJson, null, 2);
+      setJsonInput(formattedJson); // Update the input with formatted JSON
+      setFormatedJson(formattedJson); // Update the input with formatted JSON
+      setError("");
+      setSuggestions("");
+      setIsValidJson(true);
+    } catch (e) {
+      const errorMessage = getJsonErrorWithLine(e, jsonInput);
+      setError(errorMessage);
+      setSuggestions(getSuggestions(e));
+      setIsValidJson(false);
     }
-    return "Suggestion: Review your JSON structure.";
+  };
+
+  const handleValidate = () => {
+    try {
+      const parsedJson = JSON.parse(jsonInput);
+      setError("");
+      setSuggestions("");
+      setIsValidJson(true);
+    } catch (e) {
+      const errorMessage = getJsonErrorWithLine(e, jsonInput);
+      setError(errorMessage);
+      setSuggestions(getSuggestions(e));
+      setIsValidJson(false);
+    }
   };
 
   const getJsonErrorWithLine = (error, jsonString) => {
@@ -33,210 +62,159 @@ export default function Home() {
     return "Error: Invalid JSON - " + error.message;
   };
 
-  const handleFormat = () => {
-    const test1 = formattedJson && JSON.stringify(formattedJson);
-    const test2 = JSON.stringify(jsonInput);
-    const areJsonEqual = test1 === test2;
-    console.log({ areJsonEqual });
-    // console.log("areJsonEqual json", test1);
-    // console.log("areJsonEqual 2", test2);
-    try {
-      const stringJson = JSON.stringify(jsonInput);
-      const parsedJson = JSON.parse(stringJson);
-      // console.log("parsedJson", isFormatted, parsedJson);
-      const newFormattedJson = JSON.stringify(parsedJson, null, 2);
-      setFormattedJson(newFormattedJson); // Set formatted JSON
-      // setJsonInput(newFormattedJson); // Set jsonInput to formatted JSON as well
-      setError(null);
-      setIsFormatted(true);
-      console.log("stringJson check", stringJson === newFormattedJson);
-    } catch (e) {
-      const errorMessage = getJsonErrorWithLine(e, jsonInput);
-      setError(errorMessage);
-      setSuggestions(getSuggestions(e));
-      // setIsValidJson(false);
+  const getSuggestions = (error) => {
+    if (error.message.includes("Unexpected token")) {
+      return "Suggestion: Check for trailing commas or missing quotation marks.";
+    } else if (error.message.includes("Unexpected end of JSON input")) {
+      return "Suggestion: Ensure all braces and brackets are properly closed.";
     }
+    return "Suggestion: Review your JSON structure.";
   };
-  // console.log("formattedJson", formattedJson);
 
-  const toggleCollapse = (startLine) => {
-    setCollapsedSections((prev) => ({
-      ...prev,
-      [startLine]: !prev[startLine],
+  const autoFixJson = () => {
+    let fixedJson = jsonInput
+      .replace(/,(\s*})/g, "$1")
+      .replace(/,(\s*])/g, "$1")
+      .replace(/([{,])\s*([^"'\s]+)\s*:/g, '$1"$2":');
+
+    setJsonInput(fixedJson);
+    handleFormat();
+  };
+
+  // Function to toggle collapsed state
+  const toggleCollapse = (key) => {
+    setCollapsed((prevState) => ({
+      ...prevState,
+      [key]: !prevState[key],
     }));
   };
 
-  const parseJsonWithCollapse = (jsonString) => {
-    let parsedJsonString = jsonString;
-    console.log("jsonString:", jsonString);
+  // Recursive component to display JSON with collapse/expand
+  const JsonViewer = ({ data, path = "" }) => {
+    if (typeof data === "object" && data !== null) {
+      const isArray = Array.isArray(data);
+      const keys = isArray ? data.map((_, i) => i) : Object.keys(data);
 
-    if (typeof parsedJsonString !== "string") {
-      try {
-        parsedJsonString = JSON.stringify(jsonString, null, 2); // Use pretty-print format if needed
-      } catch (error) {
-        console.error("Error converting JSON object to string:", error);
-        parsedJsonString = ""; // Set to an empty string if conversion fails
-      }
-    }
-    try {
-      const lines = parsedJsonString.split("\n");
-      const collapsibleRanges = [];
-      const stack = [];
-
-      lines.forEach((line, index) => {
-        const trimmedLine = line.trim();
-        if (trimmedLine.startsWith("{") || trimmedLine.startsWith("[")) {
-          stack.push(index);
-        } else if (trimmedLine.endsWith("}") || trimmedLine.endsWith("]")) {
-          const start = stack.pop();
-          if (start !== undefined) {
-            collapsibleRanges.push({ start, end: index });
-          }
-        }
-      });
-
-      return { lines, collapsibleRanges };
-    } catch (error) {
-      console.error("Error parsing JSON:", error);
-      return { lines: [], collapsibleRanges: [] };
-    }
-  };
-
-  useEffect(() => {
-    const jsonString = isFormatted ? formattedJson : jsonInput;
-    const parsedData = parseJsonWithCollapse(jsonString);
-    setLines(parsedData.lines);
-    setCollapsibleRanges(parsedData.collapsibleRanges);
-  }, [isFormatted, formattedJson, jsonInput]);
-
-  const handleEdit = (e) => {
-    console.log("heree");
-    const jsonContent = e.currentTarget.innerText;
-
-    try {
-      const parsedJson = JSON.parse(jsonContent);
-      // const cleanedJson = JSON.stringify(parsedJson, null, 2);
-      setIsFormatted(false);
-      // setFormattedJson(cleanedJson); // Update formatted JSON state
-      setJsonInput(parsedJson); // Keep jsonInput in sync
-      setError(null);
-    } catch (error) {
-      setError("Invalid JSON format");
+      return (
+        <div style={{ paddingLeft: "20px" }}>
+          <span>
+            <button
+              onClick={() => toggleCollapse(path)}
+              style={{ cursor: "pointer", background: "none", border: "none" }}
+            >
+              {collapsed[path] ? <AiOutlineDown /> : <AiOutlineUp />}
+            </button>{" "}
+            {isArray ? `[${keys.length} items]` : `{${keys.length} keys}`}
+          </span>
+          {!collapsed[path] && (
+            <ul style={{ listStyle: "none", paddingLeft: "20px" }}>
+              {keys.map((key) => (
+                <li key={key}>
+                  <strong>{isArray ? `[${key}]` : `"${key}":`}</strong>
+                  <JsonViewer
+                    data={data[key]}
+                    path={`${path}/${key}`}
+                  />
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      );
+    } else {
+      return <span>{JSON.stringify(data)}</span>;
     }
   };
-  console.log('formattedJson+isFormatted', formattedJson+isFormatted)
 
   return (
-    <div className="min-h-screen bg-gray-500 flex items-center justify-center">
-      <div className="bg-gray-700 p-6 rounded shadow-lg max-w-5xl w-full">
-        <h1 className="text-2xl font-bold mb-4 text-center text-white">
-          Editable JSON Formatter with Collapsible Sections
-        </h1>
+    <div className="flex flex-col items-center p-8">
+      <h1 className="text-2xl font-bold mb-4">JSON Formatter & Validator</h1>
 
-        <div className="flex flex-col items-center">
-          {/* Removed the textarea to allow direct editing in the formatted section */}
-          <button
-            className="bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 transition mb-4"
-            onClick={handleFormat}
-          >
-            Format JSON
-          </button>
-
-          {/* {isFormatted && ( */}
+      <div className="flex w-full">
+        {/* Line numbers with expand/collapse icons */}
+        <div className="bg-gray-200 text-right p-2 pr-4 select-none">
+          {lineNumbers.map((line, index) => (
             <div
-              key={formattedJson+isFormatted} // Use formattedJson as a key to force re-render
-              className="flex w-full bg-gray-300 p-4 border rounded"
+              key={line}
+              className="leading-6"
             >
-              {/* Line Numbers and Collapse Arrows */}
-              <div
-                style={{
-                  paddingRight: "10px",
-                  textAlign: "right",
-                  fontFamily: "monospace",
-                  color: "gray",
-                  userSelect: "none",
-                }}
-              >
-                {lines &&
-                  lines.map((line, index) => {
-                    const isCollapsible =
-                      line.trim().startsWith("{") ||
-                      line.trim().startsWith("[");
-                    const range = collapsibleRanges.find(
-                      (range) => range.start === index
-                    );
-
-                    return (
-                      <div
-                        key={index}
-                        className="flex items-center"
-                      >
-                        <span>{index + 1}</span>
-                        {isCollapsible && (
-                          <button
-                            onClick={() => toggleCollapse(index)}
-                            style={{
-                              cursor: "pointer",
-                              color: "blue",
-                              marginLeft: "5px",
-                            }}
-                          >
-                            {collapsedSections[index] ? "▶" : "▼"}
-                          </button>
-                        )}
-                      </div>
-                    );
-                  })}
-              </div>
-
-              {/* JSON Content */}
-              <div
-                ref={contentEditableRef}
-                contentEditable
-                suppressContentEditableWarning={true}
-                onInput={handleEdit}
-                style={{
-                  whiteSpace: "pre-wrap",
-                  fontFamily: "monospace",
-                  color: "black",
-                  outline: "none",
-                  width: "100%",
-                }}
-              >
-                {lines &&
-                  lines.map((line, index) => {
-                    const isCollapsed = collapsedSections[index];
-                    const range = collapsibleRanges.find(
-                      (range) => range.start === index
-                    );
-
-                    if (
-                      isCollapsed &&
-                      range &&
-                      index > range.start &&
-                      index <= range.end
-                    ) {
-                      return null;
-                    }
-
-                    return (
-                      <div key={index}>
-                        {isCollapsed && range && index === range.start
-                          ? line.trim().startsWith("{")
-                            ? "{...}"
-                            : "[...]"
-                          : line}
-                      </div>
-                    );
-                  })}
-              </div>
+              {index < lineNumbers.length - 1 &&
+              (jsonInput.split("\n")[index]?.includes("{") ||
+                jsonInput.split("\n")[index]?.includes("[")) ? (
+                <span>
+                  <button
+                    onClick={() => toggleCollapse(`line-${index}`)}
+                    className="mr-2"
+                    style={{
+                      cursor: "pointer",
+                      background: "none",
+                      border: "none",
+                    }}
+                  >
+                    {collapsed[`line-${index}`] ? (
+                      <AiOutlineDown />
+                    ) : (
+                      <AiOutlineUp />
+                    )}
+                  </button>
+                </span>
+              ) : null}
+              {line}
             </div>
-          {/* )} */}
-          {error && <p className="text-red-500 mt-2">{error}</p>}
-
-          {suggestions && <p className="text-yellow-600 mt-2">{suggestions}</p>}
+          ))}
         </div>
+
+        {/* Textarea for JSON input */}
+        <textarea
+          ref={textareaRef}
+          className={`w-full p-2 border border-gray-300 rounded-md ${
+            isValidJson === true
+              ? "bg-green-100"
+              : isValidJson === false
+              ? "bg-red-100"
+              : ""
+          }`}
+          rows={10}
+          value={jsonInput}
+          onChange={(e) => setJsonInput(e.target.value)}
+          placeholder="Paste JSON here"
+          style={{ resize: "none" }}
+        ></textarea>
       </div>
+
+      <div className="mt-4">
+        <button
+          className="bg-blue-500 text-white px-4 py-2 rounded mr-2"
+          onClick={handleFormat}
+        >
+          Format JSON
+        </button>
+        <button
+          className="bg-green-500 text-white px-4 py-2 rounded"
+          onClick={handleValidate}
+        >
+          Validate JSON
+        </button>
+        {isValidJson === false && (
+          <button
+            className="bg-yellow-500 text-white px-4 py-2 rounded ml-2"
+            onClick={autoFixJson}
+          >
+            Auto-Fix JSON
+          </button>
+        )}
+      </div>
+
+      {error && <p className="text-red-500 mt-2">{error}</p>}
+      {suggestions && <p className="text-yellow-600 mt-2">{suggestions}</p>}
+
+      {/* JSON Viewer */}
+      {formatedJson && (
+        <div className="mt-4 w-full">
+          <h2 className="text-xl font-semibold mb-2">JSON Structure:</h2>
+          <JsonViewer data={JSON.parse(formatedJson)} />
+        </div>
+      )}
     </div>
   );
 }
