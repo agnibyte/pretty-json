@@ -9,7 +9,7 @@ export default function Home() {
   const contentEditableRef = useRef(null);
   const [suggestions, setSuggestions] = useState([]);
   const [collapsibleRanges, setCollapsibleRanges] = useState([]);
-  const [lines, setLines] = useState("");
+  const [lines, setLines] = useState([]);
 
   const getSuggestions = (error) => {
     if (error.message.includes("Unexpected token")) {
@@ -21,12 +21,10 @@ export default function Home() {
   };
 
   const getJsonErrorWithLine = (error, jsonString) => {
-    const errorMsg = error.message;
-    const positionMatch = errorMsg.match(/position (\d+)/);
+    const positionMatch = error.message.match(/position (\d+)/);
     if (positionMatch) {
       const position = parseInt(positionMatch[1], 10);
       const lines = jsonString.substring(0, position).split("\n");
-      console.log("jlines", lines);
       const lineNumber = lines.length;
       return `Error: Invalid JSON at line ${lineNumber} - ${error.message}`;
     }
@@ -54,10 +52,8 @@ export default function Home() {
       const errorMessage = getJsonErrorWithLine(e, jsonInput);
       setError(errorMessage);
       setSuggestions(getSuggestions(e));
-      // setIsValidJson(false);
     }
   };
-  // console.log("formattedJson", formattedJson);
 
   const toggleCollapse = (startLine) => {
     setCollapsedSections((prev) => ({
@@ -68,8 +64,6 @@ export default function Home() {
 
   const parseJsonWithCollapse = (jsonString) => {
     let parsedJsonString = jsonString;
-    console.log("jsonString:", jsonString);
-
     if (typeof parsedJsonString !== "string") {
       try {
         parsedJsonString = JSON.stringify(jsonString, null, 2); // Use pretty-print format if needed
@@ -78,6 +72,7 @@ export default function Home() {
         parsedJsonString = ""; // Set to an empty string if conversion fails
       }
     }
+
     try {
       const lines = parsedJsonString.split("\n");
       const collapsibleRanges = [];
@@ -110,21 +105,17 @@ export default function Home() {
   }, [isFormatted, formattedJson, jsonInput]);
 
   const handleEdit = (e) => {
-    console.log("heree");
+    console.log("in handleEdit");
     const jsonContent = e.currentTarget.innerText;
-
     try {
       const parsedJson = JSON.parse(jsonContent);
-      // const cleanedJson = JSON.stringify(parsedJson, null, 2);
       setIsFormatted(false);
-      // setFormattedJson(cleanedJson); // Update formatted JSON state
-      setJsonInput(parsedJson); // Keep jsonInput in sync
+      setJsonInput(parsedJson);
       setError(null);
     } catch (error) {
       setError("Invalid JSON format");
     }
   };
-  console.log("formattedJson+isFormatted", formattedJson + isFormatted);
 
   return (
     <div className="min-h-screen bg-gray-500 flex items-center justify-center">
@@ -134,7 +125,6 @@ export default function Home() {
         </h1>
 
         <div className="flex flex-col items-center">
-          {/* Removed the textarea to allow direct editing in the formatted section */}
           <button
             className="bg-blue-500 text-white px-6 py-2 rounded-md hover:bg-blue-600 transition mb-4"
             onClick={handleFormat}
@@ -142,9 +132,8 @@ export default function Home() {
             Format JSON
           </button>
 
-          {/* {isFormatted && ( */}
           <div
-            key={formattedJson + isFormatted} // Use formattedJson as a key to force re-render
+            key={formattedJson + isFormatted}
             className="flex w-full bg-gray-300 p-4 border rounded"
           >
             {/* Line Numbers and Collapse Arrows */}
@@ -157,35 +146,30 @@ export default function Home() {
                 userSelect: "none",
               }}
             >
-              {lines &&
-                lines.map((line, index) => {
-                  const isCollapsible =
-                    line.trim().startsWith("{") || line.trim().startsWith("[");
-                  const range = collapsibleRanges.find(
-                    (range) => range.start === index
-                  );
-
-                  return (
-                    <div
-                      key={index}
-                      className="flex items-center"
-                    >
-                      <span>{index + 1}</span>
-                      {isCollapsible && (
-                        <button
-                          onClick={() => toggleCollapse(index)}
-                          style={{
-                            cursor: "pointer",
-                            color: "blue",
-                            marginLeft: "5px",
-                          }}
-                        >
-                          {collapsedSections[index] ? "▶" : "▼"}
-                        </button>
-                      )}
-                    </div>
-                  );
-                })}
+              {lines.map((line, index) => {
+                const isCollapsible =
+                  line.trim().startsWith("{") || line.trim().startsWith("[");
+                return (
+                  <div
+                    key={index}
+                    className="flex items-center"
+                  >
+                    <span>{index + 1}</span>
+                    {isCollapsible && (
+                      <button
+                        onClick={() => toggleCollapse(index)}
+                        style={{
+                          cursor: "pointer",
+                          color: "blue",
+                          marginLeft: "5px",
+                        }}
+                      >
+                        {collapsedSections[index] ? "▶" : "▼"}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
 
             {/* JSON Content */}
@@ -230,10 +214,11 @@ export default function Home() {
                 })}
             </div>
           </div>
-          {/* )} */}
           {error && <p className="text-red-500 mt-2">{error}</p>}
 
-          {suggestions && <p className="text-yellow-600 mt-2">{suggestions}</p>}
+          {suggestions && error && (
+            <p className="text-yellow-600 mt-2">{suggestions}</p>
+          )}
         </div>
       </div>
     </div>
